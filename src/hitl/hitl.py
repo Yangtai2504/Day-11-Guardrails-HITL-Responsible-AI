@@ -84,13 +84,39 @@ class ConfidenceRouter:
         #      action="escalate", priority="high",
         #      requires_human=True, reason="Low confidence — escalating"
 
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
+
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
@@ -109,27 +135,57 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "High-Value Transaction Approval",
+        "trigger": (
+            "Customer requests a fund transfer exceeding 50,000,000 VND "
+            "or action_type is 'transfer_money' regardless of confidence score."
+        ),
+        "hitl_model": "human-in-the-loop",
+        "context_needed": (
+            "Transaction amount, destination account, customer identity verification status, "
+            "recent transaction history, and fraud risk score."
+        ),
+        "example": (
+            "Customer asks to transfer 200M VND to a new overseas account. "
+            "Agent confidence is 0.97 but the action is HIGH_RISK — a bank officer "
+            "must approve before the transfer is executed."
+        ),
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Suspicious Behaviour Escalation",
+        "trigger": (
+            "Agent confidence < 0.7, OR the session contains 3+ failed authentication "
+            "attempts followed by a sensitive request (account info, password reset)."
+        ),
+        "hitl_model": "human-in-the-loop",
+        "context_needed": (
+            "Full session transcript, login attempt log, IP address, "
+            "device fingerprint, and the specific sensitive request being made."
+        ),
+        "example": (
+            "A user fails OTP verification twice then asks the chatbot to change the "
+            "registered phone number. Agent confidence is 0.55 — escalate to fraud team "
+            "before proceeding."
+        ),
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Regulatory / Legal Query Review",
+        "trigger": (
+            "Agent confidence between 0.7–0.89 AND the query involves regulatory compliance, "
+            "legal obligations, or dispute resolution (e.g., chargeback, insurance claim)."
+        ),
+        "hitl_model": "human-on-the-loop",
+        "context_needed": (
+            "Agent's drafted response, relevant regulatory references cited, "
+            "customer account standing, and the specific regulation or policy in question."
+        ),
+        "example": (
+            "Customer disputes a transaction and asks about their rights under Circular 39/2016/TT-NHNN. "
+            "Agent drafts a response (confidence 0.81) — a compliance officer reviews it "
+            "within 30 minutes before it is sent."
+        ),
     },
 ]
 
